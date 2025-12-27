@@ -26,6 +26,15 @@ class Mensaje(Base):
     texto = Column(Text)
     fecha = Column(DateTime, default=datetime.utcnow)
 
+class Producto(Base):
+    __tablename__ = "productos"
+    id = Column(Integer, primary_key=True, index=True)
+    nombre = Column(String(100))      # Ej: Freshlady Dream
+    color = Column(String(50))        # Ej: Honey, Green
+    precio = Column(Integer)          # Ej: 55
+    stock = Column(Integer)           # Ej: 10
+    descripcion = Column(Text)        # Ej: Lentes anuales, muy naturales
+
 # Crear las tablas en la BD (si no existen)
 Base.metadata.create_all(bind=engine)
 
@@ -79,3 +88,35 @@ async def receive_message(request: Request):
     except Exception as e:
         print(f"Error: {e}")
         return {"status": "error"}
+    
+    from pydantic import BaseModel
+
+# Esto sirve para validar los datos que envíes
+class ProductoCrear(BaseModel):
+    nombre: str
+    color: str
+    precio: int
+    stock: int
+    descripcion: str
+
+@app.post("/crear-producto")
+async def crear_producto(producto: ProductoCrear):
+    db = SessionLocal()
+    nuevo_producto = Producto(
+        nombre=producto.nombre,
+        color=producto.color,
+        precio=producto.precio,
+        stock=producto.stock,
+        descripcion=producto.descripcion
+    )
+    db.add(nuevo_producto)
+    db.commit()
+    db.close()
+    return {"status": "Producto agregado", "producto": producto.nombre}
+
+@app.get("/productos")
+async def listar_productos():
+    db = SessionLocal()
+    productos = db.query(Producto).all()
+    db.close()
+    return productos
