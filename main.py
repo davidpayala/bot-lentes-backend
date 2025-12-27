@@ -1,14 +1,41 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
+from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
+from sqlalchemy.orm import sessionmaker, declarative_base
+from datetime import datetime
 import os
 
-app = FastAPI()
+# --- CONFIGURACIÓN BASE DE DATOS ---
+# Railway nos da la URL en esta variable. Si no existe (local), usa sqlite.
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
+# Ajuste necesario porque Railway a veces da la URL con 'postgres://' y SQLAlchemy quiere 'postgresql://'
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
+
+engine = create_engine(DATABASE_URL)
+SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+Base = declarative_base()
+
+# --- MODELO (TABLA) ---
+class Mensaje(Base):
+    __tablename__ = "mensajes"
+    id = Column(Integer, primary_key=True, index=True)
+    cliente_nombre = Column(String(100))
+    telefono = Column(String(50))
+    texto = Column(Text)
+    fecha = Column(DateTime, default=datetime.utcnow)
+
+# Crear las tablas en la BD (si no existen)
+Base.metadata.create_all(bind=engine)
+
+# --- APP ---
+app = FastAPI()
 VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "KM_LENTES_SECRET_123")
 
 @app.get("/")
-async def home():
-    return {"status": "El bot está vivo y listo para vender lentes"}
+def home():
+    return {"status": "Bot con Memoria Activo 🧠"}
 
 @app.get("/webhook")
 async def verify_webhook(request: Request):
@@ -22,33 +49,33 @@ async def verify_webhook(request: Request):
 async def receive_message(request: Request):
     try:
         body = await request.json()
-        
-        # Navegamos dentro del JSON para encontrar el mensaje
         entry = body['entry'][0]
         changes = entry['changes'][0]
         value = changes['value']
         
-        # Verificamos si hay un mensaje real (a veces llegan estados de "leído" o "entregado")
         if 'messages' in value:
-            message = value['messages'][0]
+            msg_data = value['messages'][0]
+            contact_data = value['contacts'][0]
             
-            # EXTRAEMOS LOS DATOS IMPORTANTES
-            numero = message['from']
-            texto = message['text']['body']
-            nombre = value['contacts'][0]['profile']['name']
+            # 1. Extraer datos
+            texto = msg_data['text']['body']
+            telefono = msg_data['from']
+            nombre = contact_data['profile']['name']
             
-            # Por ahora, solo imprimimos limpio en la consola
-            print(f"😎 NUEVO CLIENTE DETECTADO:")
-            print(f"Nombre: {nombre}")
-            print(f"Teléfono: {numero}")
-            print(f"Dice: {texto}")
-            print("-" * 20)
+            # 2. Guardar en Base de Datos
+            db = SessionLocal()
+            nuevo_mensaje = Mensaje(
+                cliente_nombre=nombre,
+                telefono=telefono,
+                texto=texto
+            )
+            db.add(nuevo_mensaje)
+            db.commit()
+            db.close()
             
-            # AQUI ES DONDE CONECTAREMOS LA BASE DE DATOS LUEGO
+            print(f"✅ Guardado en BD: {nombre} dijo '{texto}'")
             
         return {"status": "received"}
-        
     except Exception as e:
-        # Si algo falla (ej. formato inesperado), lo imprimimos pero no rompemos el servidor
-        print(f"Error procesando mensaje: {e}")
+        print(f"Error: {e}")
         return {"status": "error"}
