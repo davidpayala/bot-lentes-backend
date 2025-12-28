@@ -3,6 +3,7 @@ from fastapi.responses import PlainTextResponse
 from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
+from pydantic import BaseModel
 import os
 
 # --- CONFIGURACIÓN BASE DE DATOS ---
@@ -89,8 +90,6 @@ async def receive_message(request: Request):
         print(f"Error: {e}")
         return {"status": "error"}
     
-    from pydantic import BaseModel
-
 # Esto sirve para validar los datos que envíes
 class ProductoCrear(BaseModel):
     nombre: str
