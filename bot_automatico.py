@@ -1,7 +1,7 @@
+import os
 import time
 import schedule
 from datetime import datetime
-import os
 
 # Importamos las funciones de tus otros scripts
 # (Asegúrate de que tus archivos sincronizar_web.py y actualizar_proveedor.py estén en la misma carpeta)
