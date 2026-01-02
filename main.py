@@ -5,6 +5,7 @@ from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 from pydantic import BaseModel
 import os
+from sqlalchemy import func  # <--- AGREGAR ESTO ARRIBA
 
 # --- CONFIGURACIÓN BASE DE DATOS ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
@@ -95,9 +96,10 @@ async def receive_message(request: Request):
                 # 3. Guardar en Base de Datos
                 db = SessionLocal()
                 
-                # A) Buscamos si el cliente ya existe
+                # A) BÚSQUEDA ROBUSTA (Ignorando espacios y símbolos)
+                # Limpiamos el campo 'telefono' de la base de datos al vuelo para comparar
                 cliente_encontrado = db.query(Cliente).filter(
-                    Cliente.telefono.like(f"%{telefono_busqueda}%")
+                    func.replace(func.replace(Cliente.telefono, ' ', ''), '+', '').like(f"%{telefono_busqueda}%")
                 ).first()
                 
                 id_cliente_final = cliente_encontrado.id_cliente if cliente_encontrado else None
