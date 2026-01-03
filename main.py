@@ -6,6 +6,7 @@ from datetime import datetime
 from pydantic import BaseModel
 import os
 from sqlalchemy import func  # <--- AGREGAR ESTO ARRIBA
+from datetime import datetime, timedelta # <--- Agrega ", timedelta"
 
 # --- CONFIGURACIÓN BASE DE DATOS ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
@@ -43,6 +44,25 @@ class Mensaje(Base):
     # Mantenemos estas columnas por si acaso (para no perder datos si el cliente es nuevo)
     telefono = Column(String(50), nullable=True)
     cliente_nombre = Column(String(100), nullable=True)
+
+    hora_peru = datetime.utcnow() - timedelta(hours=5)
+
+    # Creamos el nuevo mensaje con la hora corregida
+    nuevo_mensaje = Mensaje(
+    id_cliente=id_cliente_final,
+    tipo="ENTRANTE",
+    contenido=texto_recibido,
+    cliente_nombre=nombre_perfil,
+    telefono=telefono_bruto,
+    whatsapp_id=w_id,
+    leido=False, 
+    fecha=hora_peru  # <--- AQUÍ USAMOS LA VARIABLE CORREGIDA
+    )
+                
+    db.add(nuevo_mensaje)
+    db.commit()
+    print(f"✅ Mensaje guardado: {texto_recibido} a las {hora_peru}")
+
 
 # Crear tablas si no existen (solo necesario si es una BD nueva)
 # Base.metadata.create_all(bind=engine)
