@@ -132,28 +132,52 @@ async def receive_whatsapp(request: Request):
         
         if "messages" in value:
             message = value["messages"][0]
-            telefono_bruto = message["from"]  # Ej: 51986203398
-            texto_recibido = message["text"]["body"]
+            
+            # Datos comunes
+            telefono_bruto = message["from"]
             w_id = message["id"]
             nombre_perfil = value["contacts"][0]["profile"]["name"]
+            
+            # --- DETECCIÓN DE TIPO DE MENSAJE ---
+            tipo_mensaje = message["type"]
+            texto_recibido = ""
+            
+            if tipo_mensaje == "text":
+                texto_recibido = message["text"]["body"]
+            
+            elif tipo_mensaje == "image":
+                # Si quieres, luego podemos usar este ID para descargar la foto real
+                media_id = message["image"]["id"] 
+                caption = message["image"].get("caption", "")
+                texto_recibido = f"📷 [Imagen] {caption}"
+            
+            elif tipo_mensaje == "audio":
+                texto_recibido = "🎤 [Audio]"
+            
+            elif tipo_mensaje == "document":
+                filename = message["document"].get("filename", "Archivo")
+                texto_recibido = f"PFA [Documento] {filename}"
+                
+            elif tipo_mensaje == "sticker":
+                texto_recibido = "👾 [Sticker]"
+                
+            else:
+                texto_recibido = f"[{tipo_mensaje.upper()} RECIBIDO]"
+            # -------------------------------------
 
             # --- 1. BÚSQUEDA ROBUSTA (IGNORANDO ESPACIOS) ---
             db = SessionLocal()
             try:
-                # 1. Tomamos los últimos 9 dígitos del WhatsApp (ej: 986203398)
+                # Tomamos los últimos 9 dígitos
                 telefono_short = telefono_bruto[-9:]
                 
-                # 2. CONSULTA SQL MEJORADA:
-                # "REPLACE" elimina espacios (' '), guiones ('-') y más ('+') de la columna telefono en la BD
-                # Así comparamos "986203398" contra "986203398" (limpio)
+                # Consulta limpia-espacios
                 query = text("""
                     SELECT id_cliente 
                     FROM Clientes 
                     WHERE REPLACE(REPLACE(REPLACE(telefono, ' ', ''), '-', ''), '+', '') LIKE :tel_parcial 
                     LIMIT 1
                 """)
-                
-                # Buscamos que TERMINE en esos 9 números (el % va al inicio)
                 resultado = db.execute(query, {"tel_parcial": f"%{telefono_short}"}).fetchone()
                 
                 if resultado:
@@ -161,16 +185,15 @@ async def receive_whatsapp(request: Request):
                     print(f"✅ Cliente encontrado: ID {id_cliente_final}")
                 else:
                     id_cliente_final = None
-                    print(f"⚠️ No encontrado. Buscamos terminación: {telefono_short}")
+                    print(f"⚠️ Cliente nuevo: {telefono_bruto}")
 
-            
                 # --- 2. GUARDAR MENSAJE (CON HORA PERÚ) ---
                 hora_peru = datetime.utcnow() - timedelta(hours=5)
 
                 nuevo_mensaje = Mensaje(
                     id_cliente=id_cliente_final,
                     tipo="ENTRANTE",
-                    contenido=texto_recibido,
+                    contenido=texto_recibido, # Ahora guarda "📷 [Imagen]..." en vez de fallar
                     cliente_nombre=nombre_perfil,
                     telefono=telefono_bruto,
                     whatsapp_id=w_id,
@@ -190,6 +213,7 @@ async def receive_whatsapp(request: Request):
         return {"status": "ok"}
         
     except Exception as e:
+        # print(f"Error procesando webhook: {e}")
         return {"status": "ignored"}
 
 # --- EXTRAS (Productos) ---
