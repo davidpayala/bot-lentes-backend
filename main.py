@@ -137,16 +137,23 @@ async def receive_whatsapp(request: Request):
             w_id = message["id"]
             nombre_perfil = value["contacts"][0]["profile"]["name"]
 
-            # --- 1. BÚSQUEDA ROBUSTA DE CLIENTE ---
+            # --- 1. BÚSQUEDA ROBUSTA (IGNORANDO ESPACIOS) ---
             db = SessionLocal()
             try:
-                # TRUCO: Tomamos solo los últimos 9 dígitos del número que escribe
-                # Ej: De "51986203398" nos quedamos con "986203398"
+                # 1. Tomamos los últimos 9 dígitos del WhatsApp (ej: 986203398)
                 telefono_short = telefono_bruto[-9:]
                 
-                # Buscamos en la BD alguien que tenga esos mismos 9 números al final
-                # Usamos ILIKE y los % para que ignore lo que haya antes (el 51, el +, etc)
-                query = text("SELECT id_cliente FROM Clientes WHERE telefono LIKE :tel_parcial LIMIT 1")
+                # 2. CONSULTA SQL MEJORADA:
+                # "REPLACE" elimina espacios (' '), guiones ('-') y más ('+') de la columna telefono en la BD
+                # Así comparamos "986203398" contra "986203398" (limpio)
+                query = text("""
+                    SELECT id_cliente 
+                    FROM Clientes 
+                    WHERE REPLACE(REPLACE(REPLACE(telefono, ' ', ''), '-', ''), '+', '') LIKE :tel_parcial 
+                    LIMIT 1
+                """)
+                
+                # Buscamos que TERMINE en esos 9 números (el % va al inicio)
                 resultado = db.execute(query, {"tel_parcial": f"%{telefono_short}"}).fetchone()
                 
                 if resultado:
@@ -154,8 +161,9 @@ async def receive_whatsapp(request: Request):
                     print(f"✅ Cliente encontrado: ID {id_cliente_final}")
                 else:
                     id_cliente_final = None
-                    print(f"⚠️ Cliente nuevo o no registrado: {telefono_bruto}")
+                    print(f"⚠️ No encontrado. Buscamos terminación: {telefono_short}")
 
+            
                 # --- 2. GUARDAR MENSAJE (CON HORA PERÚ) ---
                 hora_peru = datetime.utcnow() - timedelta(hours=5)
 
