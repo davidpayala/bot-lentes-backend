@@ -1,13 +1,12 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import text, create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base
 from datetime import datetime
 from pydantic import BaseModel
 import os
 from sqlalchemy import func  # <--- AGREGAR ESTO ARRIBA
 from datetime import datetime, timedelta # <--- Agrega ", timedelta"
-
 # --- CONFIGURACIÓN BASE DE DATOS ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
 
