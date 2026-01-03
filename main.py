@@ -30,6 +30,10 @@ class Cliente(Base):
     apellido = Column(String)
     telefono = Column(String)
 
+# --- APP ---
+app = FastAPI()
+VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "KM_LENTES_SECRET_123")
+
 # Definimos la tabla Mensajes con la NUEVA estructura
 class Mensaje(Base):
     __tablename__ = "mensajes"
@@ -83,10 +87,6 @@ async def receive_whatsapp(request: Request):
 
 # Crear tablas si no existen (solo necesario si es una BD nueva)
 # Base.metadata.create_all(bind=engine)
-
-# --- APP ---
-app = FastAPI()
-VERIFY_TOKEN = os.getenv("VERIFY_TOKEN", "KM_LENTES_SECRET_123")
 
 @app.get("/")
 def home():
