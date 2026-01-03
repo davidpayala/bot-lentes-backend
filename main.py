@@ -1,11 +1,9 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import text, create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey
+from sqlalchemy import func,text, create_engine, Column, Integer, String, Text, DateTime, Boolean, ForeignKey
 from sqlalchemy.orm import sessionmaker, declarative_base
-from datetime import datetime
 from pydantic import BaseModel
 import os
-from sqlalchemy import func  # <--- AGREGAR ESTO ARRIBA
 from datetime import datetime, timedelta # <--- Agrega ", timedelta"
 # --- CONFIGURACIÓN BASE DE DATOS ---
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./test.db")
@@ -127,31 +125,40 @@ async def receive_whatsapp(request: Request):
     try:
         body = await request.json()
         
-        # Extracción de datos básica
+        # Parseo de datos
         entry = body["entry"][0]
         changes = entry["changes"][0]
         value = changes["value"]
         
         if "messages" in value:
             message = value["messages"][0]
-            telefono_bruto = message["from"]
+            telefono_bruto = message["from"]  # Ej: 51986203398
             texto_recibido = message["text"]["body"]
             w_id = message["id"]
             nombre_perfil = value["contacts"][0]["profile"]["name"]
 
-            # 1. BUSCAR ID DEL CLIENTE
+            # --- 1. BÚSQUEDA ROBUSTA DE CLIENTE ---
             db = SessionLocal()
             try:
-                query = text("SELECT id_cliente FROM Clientes WHERE telefono = :tel LIMIT 1")
-                resultado = db.execute(query, {"tel": telefono_bruto}).fetchone()
+                # TRUCO: Tomamos solo los últimos 9 dígitos del número que escribe
+                # Ej: De "51986203398" nos quedamos con "986203398"
+                telefono_short = telefono_bruto[-9:]
                 
-                id_cliente_final = resultado[0] if resultado else None
+                # Buscamos en la BD alguien que tenga esos mismos 9 números al final
+                # Usamos ILIKE y los % para que ignore lo que haya antes (el 51, el +, etc)
+                query = text("SELECT id_cliente FROM Clientes WHERE telefono LIKE :tel_parcial LIMIT 1")
+                resultado = db.execute(query, {"tel_parcial": f"%{telefono_short}"}).fetchone()
                 
-                # --- 2. CALCULAR HORA PERÚ ---
-                # Esta línea es la clave: UTC menos 5 horas
-                hora_peru = datetime.utcnow() - timedelta(hours=5) # ⬅️ IMPORTANTE
+                if resultado:
+                    id_cliente_final = resultado[0]
+                    print(f"✅ Cliente encontrado: ID {id_cliente_final}")
+                else:
+                    id_cliente_final = None
+                    print(f"⚠️ Cliente nuevo o no registrado: {telefono_bruto}")
 
-                # --- 3. CREAR MENSAJE ---
+                # --- 2. GUARDAR MENSAJE (CON HORA PERÚ) ---
+                hora_peru = datetime.utcnow() - timedelta(hours=5)
+
                 nuevo_mensaje = Mensaje(
                     id_cliente=id_cliente_final,
                     tipo="ENTRANTE",
@@ -160,12 +167,11 @@ async def receive_whatsapp(request: Request):
                     telefono=telefono_bruto,
                     whatsapp_id=w_id,
                     leido=False, 
-                    fecha=hora_peru  # ⬅️ IMPORTANTE: Si borras esta línea, usará la hora de Londres
+                    fecha=hora_peru 
                 )
                 
                 db.add(nuevo_mensaje)
                 db.commit()
-                print(f"✅ Mensaje guardado a las {hora_peru}")
                 
             except Exception as e:
                 print(f"❌ Error DB: {e}")
