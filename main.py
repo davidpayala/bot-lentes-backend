@@ -47,43 +47,64 @@ class Mensaje(Base):
     telefono = Column(String(50), nullable=True)
     cliente_nombre = Column(String(100), nullable=True)
 
-@app.post("/webhook")
 async def receive_whatsapp(request: Request):
-    # ... (aquí va tu código para leer el body, obtener id_cliente_final, etc) ...
-
-    # --- AQUÍ PEGAS LA LÓGICA DE GUARDADO (Dentro de la función) ---
-    
-    # 1. Crear sesión de BD
-    db = SessionLocal() 
-    
     try:
-        # 2. Calcular hora
-        hora_peru = datetime.utcnow() - timedelta(hours=5)
-
-        # 3. Crear el objeto
-        nuevo_mensaje = Mensaje(
-            id_cliente=id_cliente_final,
-            tipo="ENTRANTE",
-            contenido=texto_recibido,
-            cliente_nombre=nombre_perfil,
-            telefono=telefono_bruto,
-            whatsapp_id=w_id,
-            leido=False, 
-            fecha=hora_peru 
-        )
+        body = await request.json()
         
-        # 4. Guardar
-        db.add(nuevo_mensaje)
-        db.commit()
-        print(f"✅ Mensaje guardado: {texto_recibido} a las {hora_peru}")
+        # 1. PARSEO BÁSICO (Esto extrae los datos de WhatsApp)
+        entry = body["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        
+        if "messages" in value:
+            message = value["messages"][0]
+            telefono_bruto = message["from"]  # El número tal cual viene (ej: 51986...)
+            texto_recibido = message["text"]["body"]
+            w_id = message["id"]
+            nombre_perfil = value["contacts"][0]["profile"]["name"]
+
+            # --- 2. LÓGICA RECUPERADA: BUSCAR EL ID DEL CLIENTE ---
+            # Abrimos conexión para buscar
+            db = SessionLocal()
+            try:
+                # Buscamos si existe un cliente con ese teléfono
+                query = text("SELECT id_cliente FROM Clientes WHERE telefono = :tel LIMIT 1")
+                resultado = db.execute(query, {"tel": telefono_bruto}).fetchone()
+                
+                if resultado:
+                    id_cliente_final = resultado[0] # ¡Lo encontramos!
+                else:
+                    id_cliente_final = None # Es un cliente nuevo o desconocido
+                
+                # --- 3. AHORA SÍ GUARDAMOS (Ya tenemos id_cliente_final) ---
+                hora_peru = datetime.utcnow() - timedelta(hours=5)
+
+                nuevo_mensaje = Mensaje(
+                    id_cliente=id_cliente_final, # <--- Ahora esta variable SÍ existe
+                    tipo="ENTRANTE",
+                    contenido=texto_recibido,
+                    cliente_nombre=nombre_perfil,
+                    telefono=telefono_bruto,
+                    whatsapp_id=w_id,
+                    leido=False, 
+                    fecha=hora_peru 
+                )
+                
+                db.add(nuevo_mensaje)
+                db.commit()
+                print(f"✅ Mensaje guardado de {nombre_perfil} ({id_cliente_final})")
+                
+            except Exception as e:
+                print(f"❌ Error interno DB: {e}")
+                db.rollback()
+            finally:
+                db.close()
+                
+        return {"status": "ok"}
         
     except Exception as e:
-        print(f"❌ Error al guardar: {e}")
-        db.rollback()
-    finally:
-        db.close()
-
-    return {"status": "ok"}
+        # Si no es un mensaje (ej: estado, check azul), lo ignoramos sin romper
+        return {"status": "ignored"}
 
 # Crear tablas si no existen (solo necesario si es una BD nueva)
 # Base.metadata.create_all(bind=engine)
