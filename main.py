@@ -33,36 +33,53 @@ class Cliente(Base):
 # Definimos la tabla Mensajes con la NUEVA estructura
 class Mensaje(Base):
     __tablename__ = "mensajes"
-    id_mensaje = Column(Integer, primary_key=True, index=True) # Antes era 'id'
+    id_mensaje = Column(Integer, primary_key=True, index=True) 
     id_cliente = Column(Integer, ForeignKey("clientes.id_cliente"), nullable=True)
-    tipo = Column(String(20), default="ENTRANTE") # 'ENTRANTE' o 'SALIENTE'
-    contenido = Column(Text) # Antes era 'texto'
+    tipo = Column(String(20), default="ENTRANTE")
+    contenido = Column(Text)
     fecha = Column(DateTime, default=datetime.now)
     leido = Column(Boolean, default=False)
     whatsapp_id = Column(String(100), nullable=True)
-    
-    # Mantenemos estas columnas por si acaso (para no perder datos si el cliente es nuevo)
     telefono = Column(String(50), nullable=True)
     cliente_nombre = Column(String(100), nullable=True)
 
-    hora_peru = datetime.utcnow() - timedelta(hours=5)
+@app.post("/webhook")
+async def receive_whatsapp(request: Request):
+    # ... (aquí va tu código para leer el body, obtener id_cliente_final, etc) ...
 
-    # Creamos el nuevo mensaje con la hora corregida
-    nuevo_mensaje = Mensaje(
-    id_cliente=id_cliente_final,
-    tipo="ENTRANTE",
-    contenido=texto_recibido,
-    cliente_nombre=nombre_perfil,
-    telefono=telefono_bruto,
-    whatsapp_id=w_id,
-    leido=False, 
-    fecha=hora_peru  # <--- AQUÍ USAMOS LA VARIABLE CORREGIDA
-    )
-                
-    db.add(nuevo_mensaje)
-    db.commit()
-    print(f"✅ Mensaje guardado: {texto_recibido} a las {hora_peru}")
+    # --- AQUÍ PEGAS LA LÓGICA DE GUARDADO (Dentro de la función) ---
+    
+    # 1. Crear sesión de BD
+    db = SessionLocal() 
+    
+    try:
+        # 2. Calcular hora
+        hora_peru = datetime.utcnow() - timedelta(hours=5)
 
+        # 3. Crear el objeto
+        nuevo_mensaje = Mensaje(
+            id_cliente=id_cliente_final,
+            tipo="ENTRANTE",
+            contenido=texto_recibido,
+            cliente_nombre=nombre_perfil,
+            telefono=telefono_bruto,
+            whatsapp_id=w_id,
+            leido=False, 
+            fecha=hora_peru 
+        )
+        
+        # 4. Guardar
+        db.add(nuevo_mensaje)
+        db.commit()
+        print(f"✅ Mensaje guardado: {texto_recibido} a las {hora_peru}")
+        
+    except Exception as e:
+        print(f"❌ Error al guardar: {e}")
+        db.rollback()
+    finally:
+        db.close()
+
+    return {"status": "ok"}
 
 # Crear tablas si no existen (solo necesario si es una BD nueva)
 # Base.metadata.create_all(bind=engine)
