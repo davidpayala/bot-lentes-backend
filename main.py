@@ -124,66 +124,60 @@ async def verify_webhook(request: Request):
 
 # Recepción de Mensajes
 @app.post("/webhook")
-async def receive_message(request: Request):
+async def receive_whatsapp(request: Request):
     try:
         body = await request.json()
         
-        # Validamos que sea un mensaje real
-        if 'entry' in body and len(body['entry']) > 0:
-            changes = body['entry'][0]['changes'][0]
-            value = changes['value']
-            
-            if 'messages' in value:
-                msg_data = value['messages'][0]
-                contact_data = value['contacts'][0]
-                
-                # 1. Extraer datos básicos
-                texto_recibido = msg_data['text']['body']
-                telefono_bruto = msg_data['from'] # Ej: 51999888777
-                nombre_perfil = contact_data['profile']['name']
-                w_id = msg_data['id']
+        # Extracción de datos básica
+        entry = body["entry"][0]
+        changes = entry["changes"][0]
+        value = changes["value"]
+        
+        if "messages" in value:
+            message = value["messages"][0]
+            telefono_bruto = message["from"]
+            texto_recibido = message["text"]["body"]
+            w_id = message["id"]
+            nombre_perfil = value["contacts"][0]["profile"]["name"]
 
-                # 2. Limpiar teléfono para buscar en DB
-                # Queremos los últimos 9 dígitos para comparar (Ej: 999888777)
-                telefono_limpio = telefono_bruto.replace(" ", "").replace("+", "")
-                if len(telefono_limpio) > 9:
-                    telefono_busqueda = telefono_limpio[-9:]
-                else:
-                    telefono_busqueda = telefono_limpio
-
-                # 3. Guardar en Base de Datos
-                db = SessionLocal()
+            # 1. BUSCAR ID DEL CLIENTE
+            db = SessionLocal()
+            try:
+                query = text("SELECT id_cliente FROM Clientes WHERE telefono = :tel LIMIT 1")
+                resultado = db.execute(query, {"tel": telefono_bruto}).fetchone()
                 
-                # A) BÚSQUEDA ROBUSTA (Ignorando espacios y símbolos)
-                # Limpiamos el campo 'telefono' de la base de datos al vuelo para comparar
-                cliente_encontrado = db.query(Cliente).filter(
-                    func.replace(func.replace(Cliente.telefono, ' ', ''), '+', '').like(f"%{telefono_busqueda}%")
-                ).first()
+                id_cliente_final = resultado[0] if resultado else None
                 
-                id_cliente_final = cliente_encontrado.id_cliente if cliente_encontrado else None
+                # --- 2. CALCULAR HORA PERÚ ---
+                # Esta línea es la clave: UTC menos 5 horas
+                hora_peru = datetime.utcnow() - timedelta(hours=5) # ⬅️ IMPORTANTE
 
-                # B) Creamos el mensaje con la estructura nueva
+                # --- 3. CREAR MENSAJE ---
                 nuevo_mensaje = Mensaje(
                     id_cliente=id_cliente_final,
-                    tipo="ENTRANTE",           # Importante para el Chat Center
-                    contenido=texto_recibido,  # Importante: ahora es 'contenido'
-                    cliente_nombre=nombre_perfil, # Guardamos nombre de WhatsApp por si acaso
+                    tipo="ENTRANTE",
+                    contenido=texto_recibido,
+                    cliente_nombre=nombre_perfil,
                     telefono=telefono_bruto,
                     whatsapp_id=w_id,
-                    leido=False,
-                    fecha=datetime.now()
+                    leido=False, 
+                    fecha=hora_peru  # ⬅️ IMPORTANTE: Si borras esta línea, usará la hora de Londres
                 )
                 
                 db.add(nuevo_mensaje)
                 db.commit()
+                print(f"✅ Mensaje guardado a las {hora_peru}")
+                
+            except Exception as e:
+                print(f"❌ Error DB: {e}")
+                db.rollback()
+            finally:
                 db.close()
                 
-                print(f"✅ Mensaje guardado de {nombre_perfil}. ID Cliente: {id_cliente_final}")
-                
-        return {"status": "received"}
+        return {"status": "ok"}
+        
     except Exception as e:
-        print(f"Error procesando mensaje: {e}")
-        return {"status": "error"}
+        return {"status": "ignored"}
 
 # --- EXTRAS (Productos) ---
 # (Mantenemos tu código de productos igual, no afecta al chat)
