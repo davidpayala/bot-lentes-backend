@@ -146,10 +146,10 @@ async def receive_whatsapp(request: Request):
                 texto_recibido = message["text"]["body"]
             
             elif tipo_mensaje == "image":
-                # Si quieres, luego podemos usar este ID para descargar la foto real
                 media_id = message["image"]["id"] 
                 caption = message["image"].get("caption", "")
-                texto_recibido = f"📷 [Imagen] {caption}"
+                # TRUCO: Guardamos el ID al final del texto con un formato especial |ID:xxx|
+                texto_recibido = f"📷 [Imagen] {caption} |ID:{media_id}|"
             
             elif tipo_mensaje == "audio":
                 texto_recibido = "🎤 [Audio]"
