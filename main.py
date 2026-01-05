@@ -138,7 +138,7 @@ async def receive_whatsapp(request: Request):
             w_id = message["id"]
             nombre_perfil = value["contacts"][0]["profile"]["name"]
             
-            # --- DETECCIÓN DE TIPO DE MENSAJE ---
+            # --- DETECCIÓN DE TIPO DE MENSAJE (ACTUALIZADO) ---
             tipo_mensaje = message["type"]
             texto_recibido = ""
             
@@ -148,18 +148,22 @@ async def receive_whatsapp(request: Request):
             elif tipo_mensaje == "image":
                 media_id = message["image"]["id"] 
                 caption = message["image"].get("caption", "")
-                # TRUCO: Guardamos el ID al final del texto con un formato especial |ID:xxx|
                 texto_recibido = f"📷 [Imagen] {caption} |ID:{media_id}|"
-            
+
+            elif tipo_mensaje == "sticker":
+                media_id = message["sticker"]["id"]
+                # Guardamos el ID igual que con las fotos
+                texto_recibido = f"👾 [Sticker] |ID:{media_id}|"
+
             elif tipo_mensaje == "audio":
-                texto_recibido = "🎤 [Audio]"
+                media_id = message["audio"]["id"]
+                # Guardamos el ID para poder reproducirlo después
+                texto_recibido = f"🎤 [Audio] |ID:{media_id}|"
             
             elif tipo_mensaje == "document":
+                media_id = message["document"]["id"]
                 filename = message["document"].get("filename", "Archivo")
-                texto_recibido = f"PFA [Documento] {filename}"
-                
-            elif tipo_mensaje == "sticker":
-                texto_recibido = "👾 [Sticker]"
+                texto_recibido = f"PFA [Documento] {filename} |ID:{media_id}|"
                 
             else:
                 texto_recibido = f"[{tipo_mensaje.upper()} RECIBIDO]"
