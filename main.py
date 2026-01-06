@@ -219,66 +219,7 @@ async def receive_whatsapp(request: Request):
     except Exception as e:
         # print(f"Error procesando webhook: {e}")
         return {"status": "ignored"}
-# --- FUNCIÓN 1: SUBIR ARCHIVO A META (Obtener ID) ---
-def subir_archivo_meta(archivo_bytes, mime_type):
-    token = os.getenv("WHATSAPP_TOKEN")
-    phone_id = os.getenv("PHONE_NUMBER_ID")
-    
-    url = f"https://graph.facebook.com/v17.0/{phone_id}/media"
-    headers = {"Authorization": f"Bearer {token}"}
-    
-    files = {
-        'file': ('archivo', archivo_bytes, mime_type),
-        'messaging_product': (None, 'whatsapp')
-    }
-    
-    try:
-        r = requests.post(url, headers=headers, files=files)
-        if r.status_code == 200:
-            return r.json().get("id") # Retorna el ID del archivo
-        else:
-            print("Error subiendo archivo:", r.text)
-            return None
-    except Exception as e:
-        print("Excepción subiendo:", e)
-        return None
 
-# --- FUNCIÓN 2: ENVIAR EL MENSAJE CON EL ARCHIVO ---
-def enviar_mensaje_media(telefono, media_id, tipo_archivo, caption="", filename="archivo"):
-    token = os.getenv("WHATSAPP_TOKEN")
-    phone_id = os.getenv("PHONE_NUMBER_ID")
-    url = f"https://graph.facebook.com/v17.0/{phone_id}/messages"
-    headers = {
-        "Authorization": f"Bearer {token}",
-        "Content-Type": "application/json"
-    }
-    
-    # Determinar si es imagen o documento
-    tipo_payload = "image" if "image" in tipo_archivo else "document"
-    
-    data = {
-        "messaging_product": "whatsapp",
-        "to": telefono,
-        "type": tipo_payload,
-        tipo_payload: {
-            "id": media_id,
-            "caption": caption
-        }
-    }
-    
-    # Si es documento, agregamos el nombre del archivo para que se vea bonito
-    if tipo_payload == "document":
-        data["document"]["filename"] = filename
-
-    try:
-        r = requests.post(url, headers=headers, json=data)
-        if r.status_code == 200:
-            return True, r.json()
-        else:
-            return False, r.text
-    except Exception as e:
-        return False, str(e)
-    
 # --- EXTRAS (Productos) ---
 # (Mantenemos tu código de productos igual, no afecta al chat)
 class ProductoCrear(BaseModel):
