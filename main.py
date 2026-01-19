@@ -50,6 +50,8 @@ class Cliente(Base):
     nombre = Column(String)
     apellido = Column(String)
     telefono = Column(String)
+    # Agrega esto para que coincida con tu base de datos:
+    fecha_registro = Column(DateTime, default=datetime.now)
 
 class Mensaje(Base):
     __tablename__ = "mensajes"
@@ -167,6 +169,7 @@ async def receive_whatsapp(request: Request):
             else:
                 id_cliente_final = None
                 print(f"⚠️ Nuevo contacto: {telefono_bruto}")
+                # AQUI FALTA EL CÓDIGO PARA CREAR EL CLIENTE
 
             # 2. Guardar Mensaje
             hora_peru = datetime.utcnow() - timedelta(hours=5)
